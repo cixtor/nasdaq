@@ -1,4 +1,5 @@
 mod accounts;
+mod record;
 
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
@@ -25,6 +26,16 @@ fn main() {
 
         println!("{}", t);
     }
+
+    let txn = record::Record {
+        date: "2021-08-16".to_string(),
+        payee: "FIDELITY".to_string(),
+        category: "Investment Status".to_string(),
+        note: "Foo".to_string(),
+        amount: 9.28,
+    };
+
+    println!("{}", txn);
 }
 
 fn read_last_date_from_file(filename: &str) -> Result<NaiveDateTime, MyErrors> {
