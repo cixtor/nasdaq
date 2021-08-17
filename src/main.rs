@@ -8,6 +8,8 @@ use rev_lines::RevLines;
 use std::fs::File;
 use std::io::BufReader;
 
+use crate::record::Record;
+
 #[derive(Debug)]
 pub enum MyErrors {
     CannotOpenFile(std::io::Error),
@@ -16,6 +18,9 @@ pub enum MyErrors {
     LineWithoutCommas,
     CannotParseDate(chrono::ParseError),
     CannotCreateTime,
+    IgnoreCSVHeader,
+    NotEnoughColumns,
+    MissingFirstColumn,
 }
 
 fn main() {
@@ -27,13 +32,12 @@ fn main() {
         println!("{}", t);
     }
 
-    let txn = record::Record {
-        date: "2021-08-16".to_string(),
-        payee: "FIDELITY".to_string(),
-        category: "Investment Status".to_string(),
-        note: "Foo".to_string(),
-        amount: 9.28,
-    };
+    let txn = parse_line(
+        "FOO",
+        1,
+        "2021-08-17,240.570007,255.330002,239.860001,255.139999,255.139999,47553800",
+    )
+    .unwrap();
 
     println!("{}", txn);
 }
@@ -72,4 +76,38 @@ fn read_last_date_from_file(filename: &str) -> Result<NaiveDateTime, MyErrors> {
     // TODO: Add one day to <date> to ignore already synced data.
 
     Ok(d.and_time(t))
+}
+
+fn parse_line(tick: &str, line_number: usize, line: &str) -> Result<Record, MyErrors> {
+    if line_number == 0 {
+        return Err(MyErrors::IgnoreCSVHeader);
+    }
+
+    let cols: Vec<&str> = line.split(",").collect();
+
+    if cols.len() < 7 {
+        return Err(MyErrors::NotEnoughColumns);
+    }
+
+    let date = match cols.first() {
+        Some(res) => res,
+        None => return Err(MyErrors::MissingFirstColumn),
+    };
+
+    let mut note: Vec<String> = Vec::new();
+    note.push(tick.to_string());
+    note.push(format!("Open: {}", cols[1]));
+    note.push(format!("High: {}", cols[2]));
+    note.push(format!("Low: {}", cols[3]));
+    note.push(format!("Close: {}", cols[4]));
+    note.push(format!("Adj Close: {}", cols[5]));
+    note.push(format!("Volume: {}", cols[6]));
+
+    Ok(Record {
+        date: date.to_string(),
+        payee: "FIDELITY".to_string(),
+        category: "Investment Status".to_string(),
+        note: note.join(" @ "),
+        amount: 0.00,
+    })
 }
