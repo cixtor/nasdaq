@@ -1,6 +1,7 @@
 mod accounts;
 mod record;
 
+use chrono::Local;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
@@ -18,6 +19,9 @@ pub enum MyErrors {
     LineWithoutCommas,
     CannotParseDate(chrono::ParseError),
     CannotCreateTime,
+    CannotDownloadData(reqwest::Error),
+    NasdaqNotOKResponse,
+    CannotReadResponse(reqwest::Error),
     IgnoreCSVHeader,
     NotEnoughColumns,
     MissingFirstColumn,
@@ -76,6 +80,41 @@ fn read_last_date_from_file(filename: &str) -> Result<NaiveDateTime, MyErrors> {
     // TODO: Add one day to <date> to ignore already synced data.
 
     Ok(d.and_time(t))
+}
+
+// Date,Open,High,Low,Close,Adj Close,Volume
+// 2021-11-28,246.080002,246.649994,240.800003,241.759995,241.759995,24778200
+// 2021-11-29,241.399994,242.789993,238.210007,240.330002,240.330002,17956300
+// 2021-11-30,240.570007,255.330002,239.860001,255.139999,255.139999,47553800
+#[tokio::main]
+async fn download_stock_data(tick: &str, t: NaiveDateTime) -> Result<Vec<Record>, MyErrors> {
+    let period1 = t.timestamp();
+    let period2 = Local::now().timestamp();
+    let target = format!("https://query1.finance.yahoo.com/v7/finance/download/{}?period1={}&period2={}&interval=1d&events=history&includeAdjustedClose=true", tick, period1, period2);
+
+    let res = match reqwest::get(target).await {
+        Ok(res) => res,
+        Err(err) => return Err(MyErrors::CannotDownloadData(err)),
+    };
+
+    if !res.status().is_success() {
+        return Err(MyErrors::NasdaqNotOKResponse);
+    }
+
+    let body = match res.text().await {
+        Ok(res) => res,
+        Err(err) => return Err(MyErrors::CannotReadResponse(err)),
+    };
+
+    let mut records: Vec<Record> = Vec::new();
+
+    for (key, line) in body.split("\n").into_iter().enumerate() {
+        if let Ok(record) = parse_line(tick, key, line) {
+            records.push(record);
+        }
+    }
+
+    Ok(records)
 }
 
 fn parse_line(tick: &str, line_number: usize, line: &str) -> Result<Record, MyErrors> {
