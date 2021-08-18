@@ -26,24 +26,33 @@ pub enum MyErrors {
     NotEnoughColumns,
     MissingFirstColumn,
 }
-
 fn main() {
     for (tick, filename) in accounts::get_accounts().iter() {
-        println!("{} {}", tick, filename);
+        if let Err(err) = sync_nasdaq_data(tick, filename) {
+            println!("{:?}", err);
+        }
+    }
+}
 
-        let t = read_last_date_from_file(filename).unwrap();
+fn sync_nasdaq_data(tick: &str, filename: &str) -> Result<(), MyErrors> {
+    println!("{} {}", tick, filename);
 
-        println!("{}", t);
+    let t = match read_last_date_from_file(filename) {
+        Ok(res) => res,
+        Err(err) => return Err(err),
+    };
+
+    let records = match download_stock_data(tick, t) {
+        Ok(res) => res,
+        Err(err) => return Err(err),
+    };
+
+    if records.len() == 0 {
+        // No need to open the file.
+        return Ok(());
     }
 
-    let txn = parse_line(
-        "FOO",
-        1,
-        "2021-08-17,240.570007,255.330002,239.860001,255.139999,255.139999,47553800",
-    )
-    .unwrap();
-
-    println!("{}", txn);
+    Ok(())
 }
 
 fn read_last_date_from_file(filename: &str) -> Result<NaiveDateTime, MyErrors> {
