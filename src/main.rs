@@ -7,13 +7,16 @@ use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use rev_lines::RevLines;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::io::Write;
 
 use crate::record::Record;
 
 #[derive(Debug)]
 pub enum MyErrors {
     CannotOpenFile(std::io::Error),
+    CannotWriteFile(std::io::Error),
     CannotReadFileInReverse(std::io::Error),
     FileHasNoLines,
     LineWithoutCommas,
@@ -26,6 +29,7 @@ pub enum MyErrors {
     NotEnoughColumns,
     MissingFirstColumn,
 }
+
 fn main() {
     for (tick, filename) in accounts::get_accounts().iter() {
         if let Err(err) = sync_nasdaq_data(tick, filename) {
@@ -50,6 +54,20 @@ fn sync_nasdaq_data(tick: &str, filename: &str) -> Result<(), MyErrors> {
     if records.len() == 0 {
         // No need to open the file.
         return Ok(());
+    }
+
+    let mut file = match OpenOptions::new().append(true).open(filename) {
+        Ok(res) => res,
+        Err(err) => return Err(MyErrors::CannotWriteFile(err)),
+    };
+
+    for txn in records {
+        println!("{}", txn);
+
+        if let Err(err) = file.write(format!("{}\n", txn).as_bytes()) {
+            println!("{} {}", tick, err);
+            break;
+        }
     }
 
     Ok(())
