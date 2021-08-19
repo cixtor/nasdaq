@@ -10,6 +10,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::Write;
+use std::thread;
 
 use crate::record::Record;
 
@@ -32,10 +33,19 @@ pub enum MyErrors {
 }
 
 fn main() {
+    let mut threads = Vec::new();
+
     for (tick, filename) in accounts::get_accounts().iter() {
-        if let Err(err) = sync_nasdaq_data(tick, filename) {
-            println!("{:?}", err);
-        }
+        let child_thread = thread::spawn(|| {
+            if let Err(err) = sync_nasdaq_data(tick, filename) {
+                println!("{:?}", err);
+            }
+        });
+        threads.push(child_thread);
+    }
+
+    for t in threads {
+        t.join().unwrap();
     }
 }
 
