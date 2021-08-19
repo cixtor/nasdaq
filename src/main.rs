@@ -22,6 +22,7 @@ pub enum MyErrors {
     LineWithoutCommas,
     CannotParseDate(chrono::ParseError),
     CannotCreateTime,
+    CannotParseTimestamp,
     CannotDownloadData(reqwest::Error),
     NasdaqNotOKResponse,
     CannotReadResponse(reqwest::Error),
@@ -104,9 +105,14 @@ fn read_last_date_from_file(filename: &str) -> Result<NaiveDateTime, MyErrors> {
         None => return Err(MyErrors::CannotCreateTime),
     };
 
-    // TODO: Add one day to <date> to ignore already synced data.
+    let date_time = d.and_time(t);
+    let next_day_ts = (date_time.timestamp() + 86400) * 1000;
+    let next_day_dt = match NaiveDateTime::from_timestamp_millis(next_day_ts) {
+        Some(res) => res,
+        None => return Err(MyErrors::CannotParseTimestamp),
+    };
 
-    Ok(d.and_time(t))
+    Ok(next_day_dt)
 }
 
 // Date,Open,High,Low,Close,Adj Close,Volume
